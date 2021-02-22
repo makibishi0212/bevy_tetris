@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use rand::prelude::*;
 
 const UNIT_WIDTH: u32 = 40;
 const UNIT_HEIGHT: u32 = 40;
@@ -14,15 +15,37 @@ struct Position {
     y: i32,
 }
 
-fn setup(commands: &mut Commands) {
-    commands.spawn(Camera2dBundle::default());
+struct Materials {
+    colors: Vec<Handle<ColorMaterial>>,
+}
+
+fn spawn_block_element(commands: &mut Commands, materials: Res<Materials>) {
+    let mut rng = rand::thread_rng();
+    let mut color_index: usize = rng.gen();
+    color_index %= materials.colors.len();
+
     commands
         .spawn(SpriteBundle {
+            material: materials.colors[color_index].clone(),
             ..Default::default()
         })
         .with(Position { x: 1, y: 5 })
         .current_entity()
         .unwrap();
+}
+
+fn setup(commands: &mut Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+    commands.spawn(Camera2dBundle::default());
+    commands.insert_resource(Materials {
+        colors: vec![
+            materials.add(Color::rgb_u8(64, 230, 100).into()),
+            materials.add(Color::rgb_u8(220, 64, 90).into()),
+            materials.add(Color::rgb_u8(70, 150, 210).into()),
+            materials.add(Color::rgb_u8(220, 230, 70).into()),
+            materials.add(Color::rgb_u8(35, 220, 241).into()),
+            materials.add(Color::rgb_u8(240, 140, 70).into()),
+        ],
+    });
 }
 
 fn position_transform(mut position_query: Query<(&Position, &mut Transform, &mut Sprite)>) {
@@ -50,6 +73,7 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup.system())
+        .add_system(spawn_block_element.system())
         .add_system(position_transform.system())
         .run();
 }
