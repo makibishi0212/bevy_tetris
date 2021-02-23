@@ -21,6 +21,8 @@ struct Materials {
 
 struct BlockPatterns(Vec<Vec<(i32, i32)>>);
 
+struct GameTimer(Timer);
+
 struct NewBlockEvent;
 
 fn next_block(block_patterns: &Vec<Vec<(i32, i32)>>) -> Vec<(i32, i32)> {
@@ -119,6 +121,20 @@ fn position_transform(mut position_query: Query<(&Position, &mut Transform, &mut
         });
 }
 
+fn game_timer(time: Res<Time>, mut timer: ResMut<GameTimer>) {
+    timer.0.tick(time.delta_seconds());
+}
+
+fn block_fall(timer: ResMut<GameTimer>, mut block_query: Query<(Entity, &mut Position)>) {
+    if !timer.0.finished() {
+        return;
+    }
+
+    block_query.iter_mut().for_each(|(_, mut pos)| {
+        pos.y -= 1;
+    });
+}
+
 fn main() {
     App::build()
         .add_resource(WindowDescriptor {
@@ -136,10 +152,16 @@ fn main() {
             vec![(0, 0), (0, 1), (1, 0), (1, 1)],   // 四角
             vec![(0, 0), (-1, 0), (1, 0), (0, 1)],  // T
         ]))
+        .add_resource(GameTimer(Timer::new(
+            std::time::Duration::from_millis(400),
+            true,
+        )))
         .add_plugins(DefaultPlugins)
         .add_event::<NewBlockEvent>()
         .add_startup_system(setup.system())
         .add_system(spawn_block.system())
         .add_system(position_transform.system())
+        .add_system(game_timer.system())
+        .add_system(block_fall.system())
         .run();
 }
