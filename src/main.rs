@@ -21,6 +21,8 @@ struct Materials {
 
 struct BlockPatterns(Vec<Vec<(i32, i32)>>);
 
+struct NewBlockEvent;
+
 fn next_block(block_patterns: &Vec<Vec<(i32, i32)>>) -> Vec<(i32, i32)> {
     let mut rng = rand::thread_rng();
     let mut pattern_index: usize = rng.gen();
@@ -41,7 +43,17 @@ fn spawn_block(
     commands: &mut Commands,
     materials: Res<Materials>,
     block_patterns: Res<BlockPatterns>,
+    new_block_events: Res<Events<NewBlockEvent>>,
+    mut new_block_events_reader: Local<EventReader<NewBlockEvent>>,
 ) {
+    if new_block_events_reader
+        .iter(&new_block_events)
+        .next()
+        .is_none()
+    {
+        return;
+    }
+
     let new_block = next_block(&block_patterns.0);
     let new_color = next_color(&materials.colors);
 
@@ -72,7 +84,11 @@ fn spawn_block_element(commands: &mut Commands, color: Handle<ColorMaterial>, po
         .unwrap();
 }
 
-fn setup(commands: &mut Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+fn setup(
+    commands: &mut Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut new_block_events: ResMut<Events<NewBlockEvent>>,
+) {
     commands.spawn(Camera2dBundle::default());
     commands.insert_resource(Materials {
         colors: vec![
@@ -84,6 +100,8 @@ fn setup(commands: &mut Commands, mut materials: ResMut<Assets<ColorMaterial>>) 
             materials.add(Color::rgb_u8(240, 140, 70).into()),
         ],
     });
+
+    new_block_events.send(NewBlockEvent);
 }
 
 fn position_transform(mut position_query: Query<(&Position, &mut Transform, &mut Sprite)>) {
@@ -119,6 +137,7 @@ fn main() {
             vec![(0, 0), (-1, 0), (1, 0), (0, 1)],  // T
         ]))
         .add_plugins(DefaultPlugins)
+        .add_event::<NewBlockEvent>()
         .add_startup_system(setup.system())
         .add_system(spawn_block.system())
         .add_system(position_transform.system())
