@@ -19,17 +19,55 @@ struct Materials {
     colors: Vec<Handle<ColorMaterial>>,
 }
 
-fn spawn_block_element(commands: &mut Commands, materials: Res<Materials>) {
+struct BlockPatterns(Vec<Vec<(i32, i32)>>);
+
+fn next_block(block_patterns: &Vec<Vec<(i32, i32)>>) -> Vec<(i32, i32)> {
+    let mut rng = rand::thread_rng();
+    let mut pattern_index: usize = rng.gen();
+    pattern_index %= block_patterns.len();
+
+    block_patterns[pattern_index].clone()
+}
+
+fn next_color(colors: &Vec<Handle<ColorMaterial>>) -> Handle<ColorMaterial> {
     let mut rng = rand::thread_rng();
     let mut color_index: usize = rng.gen();
-    color_index %= materials.colors.len();
+    color_index %= colors.len();
 
+    colors[color_index].clone()
+}
+
+fn spawn_block(
+    commands: &mut Commands,
+    materials: Res<Materials>,
+    block_patterns: Res<BlockPatterns>,
+) {
+    let new_block = next_block(&block_patterns.0);
+    let new_color = next_color(&materials.colors);
+
+    // ブロックの初期位置
+    let initial_x = X_LENGTH / 2;
+    let initial_y = Y_LENGTH - 4;
+
+    new_block.iter().for_each(|(r_x, r_y)| {
+        spawn_block_element(
+            commands,
+            new_color.clone(),
+            Position {
+                x: (initial_x as i32 + r_x),
+                y: (initial_y as i32 + r_y),
+            },
+        );
+    });
+}
+
+fn spawn_block_element(commands: &mut Commands, color: Handle<ColorMaterial>, position: Position) {
     commands
         .spawn(SpriteBundle {
-            material: materials.colors[color_index].clone(),
+            material: color,
             ..Default::default()
         })
-        .with(Position { x: 1, y: 5 })
+        .with(position)
         .current_entity()
         .unwrap();
 }
@@ -71,9 +109,18 @@ fn main() {
             height: SCREEN_HEIGHT as f32,
             ..Default::default()
         })
+        .add_resource(BlockPatterns(vec![
+            vec![(0, 0), (0, -1), (0, 1), (0, 2)],  // I
+            vec![(0, 0), (0, -1), (0, 1), (-1, 1)], // L
+            vec![(0, 0), (0, -1), (0, 1), (1, 1)],  // 逆L
+            vec![(0, 0), (0, -1), (1, 0), (1, 1)],  // Z
+            vec![(0, 0), (1, 0), (0, 1), (1, -1)],  // 逆Z
+            vec![(0, 0), (0, 1), (1, 0), (1, 1)],   // 四角
+            vec![(0, 0), (-1, 0), (1, 0), (0, 1)],  // T
+        ]))
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup.system())
-        .add_system(spawn_block_element.system())
+        .add_system(spawn_block.system())
         .add_system(position_transform.system())
         .run();
 }
