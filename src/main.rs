@@ -15,6 +15,10 @@ struct Position {
     y: i32,
 }
 
+struct Fix;
+
+struct Free;
+
 struct Materials {
     colors: Vec<Handle<ColorMaterial>>,
 }
@@ -22,6 +26,8 @@ struct Materials {
 struct BlockPatterns(Vec<Vec<(i32, i32)>>);
 
 struct GameTimer(Timer);
+
+struct GameBoard(Vec<Vec<bool>>);
 
 struct NewBlockEvent;
 
@@ -82,6 +88,7 @@ fn spawn_block_element(commands: &mut Commands, color: Handle<ColorMaterial>, po
             ..Default::default()
         })
         .with(position)
+        .with(Free)
         .current_entity()
         .unwrap();
 }
@@ -125,14 +132,38 @@ fn game_timer(time: Res<Time>, mut timer: ResMut<GameTimer>) {
     timer.0.tick(time.delta_seconds());
 }
 
-fn block_fall(timer: ResMut<GameTimer>, mut block_query: Query<(Entity, &mut Position)>) {
+fn block_fall(
+    commands: &mut Commands,
+    timer: ResMut<GameTimer>,
+    mut block_query: Query<(Entity, &mut Position, &Free)>,
+    mut game_board: ResMut<GameBoard>,
+    mut new_block_events: ResMut<Events<NewBlockEvent>>,
+) {
     if !timer.0.finished() {
         return;
     }
 
-    block_query.iter_mut().for_each(|(_, mut pos)| {
-        pos.y -= 1;
+    let cannot_fall = block_query.iter_mut().any(|(_, pos, _)| {
+        if pos.x as u32 >= X_LENGTH || pos.y as u32 >= Y_LENGTH {
+            return false;
+        }
+
+        // yが0、または一つ下にブロックがすでに存在する
+        pos.y == 0 || game_board.0[(pos.y - 1) as usize][pos.x as usize]
     });
+
+    if cannot_fall {
+        block_query.iter_mut().for_each(|(entity, pos, _)| {
+            commands.remove_one::<Free>(entity);
+            commands.insert_one(entity, Fix);
+            game_board.0[pos.y as usize][pos.x as usize] = true;
+        });
+        new_block_events.send(NewBlockEvent);
+    } else {
+        block_query.iter_mut().for_each(|(_, mut pos, _)| {
+            pos.y -= 1;
+        });
+    }
 }
 
 fn main() {
@@ -156,6 +187,7 @@ fn main() {
             std::time::Duration::from_millis(400),
             true,
         )))
+        .add_resource(GameBoard(vec![vec![false; 25]; 25]))
         .add_plugins(DefaultPlugins)
         .add_event::<NewBlockEvent>()
         .add_startup_system(setup.system())
