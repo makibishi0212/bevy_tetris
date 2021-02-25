@@ -26,6 +26,7 @@ struct Materials {
 struct BlockPatterns(Vec<Vec<(i32, i32)>>);
 
 struct GameTimer(Timer);
+struct InputTimer(Timer);
 
 struct GameBoard(Vec<Vec<bool>>);
 
@@ -67,7 +68,7 @@ fn spawn_block(
 
     // ブロックの初期位置
     let initial_x = X_LENGTH / 2;
-    let initial_y = Y_LENGTH - 4;
+    let initial_y = Y_LENGTH;
 
     new_block.iter().for_each(|(r_x, r_y)| {
         spawn_block_element(
@@ -128,8 +129,13 @@ fn position_transform(mut position_query: Query<(&Position, &mut Transform, &mut
         });
 }
 
-fn game_timer(time: Res<Time>, mut timer: ResMut<GameTimer>) {
-    timer.0.tick(time.delta_seconds());
+fn game_timer(
+    time: Res<Time>,
+    mut game_timer: ResMut<GameTimer>,
+    mut input_timer: ResMut<InputTimer>,
+) {
+    game_timer.0.tick(time.delta_seconds());
+    input_timer.0.tick(time.delta_seconds());
 }
 
 fn block_fall(
@@ -166,6 +172,57 @@ fn block_fall(
     }
 }
 
+fn block_horizontal_move(
+    key_input: Res<Input<KeyCode>>,
+    timer: ResMut<InputTimer>,
+    game_board: ResMut<GameBoard>,
+    mut free_block_query: Query<(Entity, &mut Position, &Free)>,
+) {
+    if !timer.0.finished() {
+        return;
+    }
+
+    if key_input.pressed(KeyCode::Left) {
+        let ok_move_left = free_block_query.iter_mut().all(|(_, pos, _)| {
+            if pos.y as u32 >= Y_LENGTH {
+                return pos.x > 0;
+            }
+
+            if pos.x == 0 {
+                return false;
+            }
+
+            !game_board.0[(pos.y) as usize][pos.x as usize - 1]
+        });
+
+        if ok_move_left {
+            free_block_query.iter_mut().for_each(|(_, mut pos, _)| {
+                pos.x -= 1;
+            });
+        }
+    }
+
+    if key_input.pressed(KeyCode::Right) {
+        let ok_move_right = free_block_query.iter_mut().all(|(_, pos, _)| {
+            if pos.y as u32 >= Y_LENGTH {
+                return pos.x as u32 <= X_LENGTH;
+            }
+
+            if pos.x as u32 == X_LENGTH - 1 {
+                return false;
+            }
+
+            !game_board.0[(pos.y) as usize][pos.x as usize + 1]
+        });
+
+        if ok_move_right {
+            free_block_query.iter_mut().for_each(|(_, mut pos, _)| {
+                pos.x += 1;
+            });
+        }
+    }
+}
+
 fn main() {
     App::build()
         .add_resource(WindowDescriptor {
@@ -187,6 +244,10 @@ fn main() {
             std::time::Duration::from_millis(400),
             true,
         )))
+        .add_resource(InputTimer(Timer::new(
+            std::time::Duration::from_millis(100),
+            true,
+        )))
         .add_resource(GameBoard(vec![vec![false; 25]; 25]))
         .add_plugins(DefaultPlugins)
         .add_event::<NewBlockEvent>()
@@ -195,5 +256,6 @@ fn main() {
         .add_system(position_transform.system())
         .add_system(game_timer.system())
         .add_system(block_fall.system())
+        .add_system(block_horizontal_move.system())
         .run();
 }
