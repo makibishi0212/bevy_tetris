@@ -223,6 +223,40 @@ fn block_horizontal_move(
     }
 }
 
+fn block_vertical_move(
+    key_input: Res<Input<KeyCode>>,
+    mut game_board: ResMut<GameBoard>,
+    mut free_block_query: Query<(Entity, &mut Position, &Free)>,
+) {
+    if !key_input.just_pressed(KeyCode::Down) {
+        return;
+    }
+
+    let mut down_height = 0;
+    let mut collide = false;
+
+    while !collide {
+        down_height += 1;
+        free_block_query.iter_mut().for_each(|(_, pos, _)| {
+            if pos.y < down_height {
+                collide = true;
+                return;
+            }
+
+            if game_board.0[(pos.y - down_height) as usize][pos.x as usize] {
+                collide = true;
+            }
+        });
+    }
+
+    down_height -= 1;
+    free_block_query.iter_mut().for_each(|(_, mut pos, _)| {
+        game_board.0[pos.y as usize][pos.x as usize] = false;
+        pos.y -= down_height;
+        game_board.0[pos.y as usize][pos.x as usize] = true;
+    });
+}
+
 fn main() {
     App::build()
         .add_resource(WindowDescriptor {
@@ -257,5 +291,6 @@ fn main() {
         .add_system(game_timer.system())
         .add_system(block_fall.system())
         .add_system(block_horizontal_move.system())
+        .add_system(block_vertical_move.system())
         .run();
 }
