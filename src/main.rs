@@ -15,6 +15,11 @@ struct Position {
     y: i32,
 }
 
+struct RelativePosition {
+    x: i32,
+    y: i32,
+}
+
 struct Fix;
 
 struct Free;
@@ -78,17 +83,24 @@ fn spawn_block(
                 x: (initial_x as i32 + r_x),
                 y: (initial_y as i32 + r_y),
             },
+            RelativePosition { x: *r_x, y: *r_y },
         );
     });
 }
 
-fn spawn_block_element(commands: &mut Commands, color: Handle<ColorMaterial>, position: Position) {
+fn spawn_block_element(
+    commands: &mut Commands,
+    color: Handle<ColorMaterial>,
+    position: Position,
+    relative_position: RelativePosition,
+) {
     commands
         .spawn(SpriteBundle {
             material: color,
             ..Default::default()
         })
         .with(position)
+        .with(relative_position)
         .with(Free)
         .current_entity()
         .unwrap();
@@ -257,6 +269,59 @@ fn block_vertical_move(
     });
 }
 
+fn block_rotate(
+    key_input: Res<Input<KeyCode>>,
+    game_board: ResMut<GameBoard>,
+    mut free_block_query: Query<(Entity, &mut Position, &mut RelativePosition, &Free)>,
+) {
+    if !key_input.just_pressed(KeyCode::Up) {
+        return;
+    }
+
+    // cos,-sin,sin,cos (-90)
+    let rot_matrix = vec![vec![0, 1], vec![-1, 0]];
+    let calc_rotated_pos = |pos: &Position, r_pos: &RelativePosition| {
+        let origin_pos_x = pos.x - r_pos.x;
+        let origin_pos_y = pos.y - r_pos.y;
+
+        let new_r_pos_x = rot_matrix[0][0] * r_pos.x + rot_matrix[0][1] * r_pos.y;
+        let new_r_pos_y = rot_matrix[1][0] * r_pos.x + rot_matrix[1][1] * r_pos.y;
+        let new_pos_x = origin_pos_x + new_r_pos_x;
+        let new_pos_y = origin_pos_y + new_r_pos_y;
+
+        ((new_pos_x, new_pos_y), (new_r_pos_x, new_r_pos_y))
+    };
+
+    let rotable = free_block_query.iter_mut().all(|(_, pos, r_pos, _)| {
+        let ((new_pos_x, new_pos_y), _) = calc_rotated_pos(&pos, &r_pos);
+
+        let valid_index_x = new_pos_x >= 0 && new_pos_x < X_LENGTH as i32;
+        let valid_index_y = new_pos_y >= 0 && new_pos_y < Y_LENGTH as i32;
+
+        if !valid_index_x || !valid_index_y {
+            return false;
+        }
+
+        !game_board.0[new_pos_y as usize][new_pos_x as usize]
+    });
+
+    if !rotable {
+        return;
+    }
+
+    free_block_query
+        .iter_mut()
+        .for_each(|(_, mut pos, mut r_pos, _)| {
+            let ((new_pos_x, new_pos_y), (new_r_pos_x, new_r_pos_y)) =
+                calc_rotated_pos(&pos, &r_pos);
+            r_pos.x = new_r_pos_x;
+            r_pos.y = new_r_pos_y;
+
+            pos.x = new_pos_x;
+            pos.y = new_pos_y;
+        });
+}
+
 fn main() {
     App::build()
         .add_resource(WindowDescriptor {
@@ -292,5 +357,6 @@ fn main() {
         .add_system(block_fall.system())
         .add_system(block_horizontal_move.system())
         .add_system(block_vertical_move.system())
+        .add_system(block_rotate.system())
         .run();
 }
