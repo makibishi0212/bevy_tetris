@@ -322,6 +322,59 @@ fn block_rotate(
         });
 }
 
+fn delete_line(
+    commands: &mut Commands,
+    timer: ResMut<GameTimer>,
+    mut game_board: ResMut<GameBoard>,
+    mut fix_block_query: Query<(Entity, &mut Position, &Fix)>,
+) {
+    if !timer.0.finished() {
+        return;
+    }
+
+    let mut delete_line_set = std::collections::HashSet::new();
+    for y in 0..Y_LENGTH {
+        let mut delete_current_line = true;
+        for x in 0..X_LENGTH {
+            if !game_board.0[y as usize][x as usize] {
+                delete_current_line = false;
+                break;
+            }
+        }
+
+        if delete_current_line {
+            delete_line_set.insert(y);
+        }
+    }
+
+    fix_block_query.iter_mut().for_each(|(_, pos, _)| {
+        if delete_line_set.get(&(pos.y as u32)).is_some() {
+            game_board.0[pos.y as usize][pos.x as usize] = false;
+        }
+    });
+
+    let mut new_y = vec![0i32; Y_LENGTH as usize];
+    for y in 0..Y_LENGTH {
+        let mut down = 0;
+        delete_line_set.iter().for_each(|line| {
+            if y > *line {
+                down += 1;
+            }
+        });
+        new_y[y as usize] = y as i32 - down;
+    }
+
+    fix_block_query.iter_mut().for_each(|(entity, mut pos, _)| {
+        if delete_line_set.get(&(pos.y as u32)).is_some() {
+            commands.despawn(entity);
+        } else {
+            game_board.0[pos.y as usize][pos.x as usize] = false;
+            pos.y = new_y[pos.y as usize];
+            game_board.0[pos.y as usize][pos.x as usize] = true;
+        }
+    });
+}
+
 fn main() {
     App::build()
         .add_resource(WindowDescriptor {
@@ -351,6 +404,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_event::<NewBlockEvent>()
         .add_startup_system(setup.system())
+        .add_system(delete_line.system())
         .add_system(spawn_block.system())
         .add_system(position_transform.system())
         .add_system(game_timer.system())
