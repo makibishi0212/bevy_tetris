@@ -342,7 +342,7 @@ fn delete_line(
     commands: &mut Commands,
     timer: ResMut<GameTimer>,
     mut game_board: ResMut<GameBoard>,
-    mut fix_block_query: Query<(Entity, &mut Position, &Fix)>,
+    mut fixed_block_query: Query<(Entity, &mut Position, &Fix)>,
 ) {
     if !timer.0.finished() {
         return;
@@ -363,7 +363,7 @@ fn delete_line(
         }
     }
 
-    fix_block_query.iter_mut().for_each(|(_, pos, _)| {
+    fixed_block_query.iter_mut().for_each(|(_, pos, _)| {
         if delete_line_set.get(&(pos.y as u32)).is_some() {
             game_board.0[pos.y as usize][pos.x as usize] = false;
         }
@@ -380,15 +380,17 @@ fn delete_line(
         new_y[y as usize] = y as i32 - down;
     }
 
-    fix_block_query.iter_mut().for_each(|(entity, mut pos, _)| {
-        if delete_line_set.get(&(pos.y as u32)).is_some() {
-            commands.despawn(entity);
-        } else {
-            game_board.0[pos.y as usize][pos.x as usize] = false;
-            pos.y = new_y[pos.y as usize];
-            game_board.0[pos.y as usize][pos.x as usize] = true;
-        }
-    });
+    fixed_block_query
+        .iter_mut()
+        .for_each(|(entity, mut pos, _)| {
+            if delete_line_set.get(&(pos.y as u32)).is_some() {
+                commands.despawn(entity);
+            } else {
+                game_board.0[pos.y as usize][pos.x as usize] = false;
+                pos.y = new_y[pos.y as usize];
+                game_board.0[pos.y as usize][pos.x as usize] = true;
+            }
+        });
 }
 
 fn gameover(
