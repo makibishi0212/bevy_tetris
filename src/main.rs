@@ -294,9 +294,10 @@ fn block_rotate(
         return;
     }
 
-    // cos,-sin,sin,cos (-90)
-    let rot_matrix = vec![vec![0, 1], vec![-1, 0]];
-    let calc_rotated_pos = |pos: &Position, r_pos: &RelativePosition| {
+    fn calc_rotated_pos(pos: &Position, r_pos: &RelativePosition) -> ((i32, i32), (i32, i32)) {
+        // cos,-sin,sin,cos (-90)
+        let rot_matrix = vec![vec![0, 1], vec![-1, 0]];
+
         let origin_pos_x = pos.x - r_pos.x;
         let origin_pos_y = pos.y - r_pos.y;
 
